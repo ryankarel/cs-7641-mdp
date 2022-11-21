@@ -112,13 +112,18 @@ class MarkovDecisionProcess:
             np.random.random_sample(len(self.states))
         ))
 
-        estimated_policy = dict(zip(
+        pi = dict(zip(
             self.states,
-            np.random.random_sample(len(self.states))
+            [random.choice(self.actions)] * len(self.states)
         ))
 
+        # for...?
         change_in_value = 0
+        for s in self.states:
+            v = V[s]
+            V[s] = sum(
 
+            )
 
 
 
@@ -142,7 +147,7 @@ class BlackjackMDP(MarkovDecisionProcess):
 
         self.actions = [False, True] # to hit or not hit
 
-    def accessible_states(self, s):
+    def accessible_states(self, s, a):
         possibilities = []
         if s[-1] == 1:
             return possibilities # [], a terminal state with no remaining options
@@ -150,14 +155,14 @@ class BlackjackMDP(MarkovDecisionProcess):
         holding = s.copy()
         holding[-1] = 1
         possibilities.append(holding)
-        if s[0] > 21: # already bust
+        if s[0] > 21 or a == False: # already bust and will now not hit
             return possibilities
-        if s[1] == 1: # already has at least one ace
+        if s[1] == 1 and a == True: # already has at least one ace
             for i in range(1, 12):
                 possible_hit = s.copy()
                 possible_hit[0] += i
                 possibilities.append(possible_hit)
-        else:
+        elif s[1] == 0 and a == True:
             # no aces yet
             for new_ace_presence in [0, 1]:
                 for i in range(1, 12):
@@ -167,6 +172,8 @@ class BlackjackMDP(MarkovDecisionProcess):
                     possible_hit[0] += i
                     possible_hit[1] = new_ace_presence
                     possibilities.append(possible_hit)
+        else:
+            raise Exception('Didnt expect this case when getting states')
         return possibilities
 
     def transition_model(self, s, a, s_prime):
