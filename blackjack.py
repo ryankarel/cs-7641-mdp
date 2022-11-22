@@ -11,42 +11,11 @@ from copy import copy
 LOSE = -1
 WIN = 1
 
+DEALER_STAND_THRESHOLD = 17
+MAX_HITTABLE_VALUE = 21
+
 verbose = False
 
-
-def deal():
-    probabilities = np.array([1.0] * 8 + [4.0] + [1.0])
-    probabilities /= probabilities.sum()
-    random_card_value = np.random.choice(
-        range(2, 12),
-        p=probabilities
-    )
-    return random_card_value
-
-
-def dealer_hit(cards):
-    if verbose: print(f'Dealer cards: {cards}')
-    return sum(cards) < 17
-
-
-def bust(cards):
-    return sum(cards) > 21
-
-
-def hand_value(cards):
-    face_value = sum(cards)
-    return face_value
-        
-
-def compare_hands(player_cards, dealer_cards):
-    if verbose:
-        print(f'Player has {player_cards}, dealer has {dealer_cards}')
-    if hand_value(player_cards) > hand_value(dealer_cards):
-        if verbose: print('Player wins')
-        return WIN
-    else:
-        if verbose: print('Player loses')
-        return LOSE
 
 
 class MarkovDecisionProcess:
@@ -57,6 +26,21 @@ class MarkovDecisionProcess:
         self.transition_model = transition_model # a callable
         self.reward = reward # a callable
         self.accessible_states = accessible_states # a callable
+        self.available_actions = None # a callable
+        
+    def _sample_state_layout(self):
+        s = random.choice(self.states)
+        print(f'Randomly sampled state: {s}')
+        available_actions = self.available_actions(s)
+        print(f'Available actions: {available_actions}')
+        a = random.choice(available_actions)
+        print(f'Available states from s={s} and a={a}:')
+        probs = []
+        for s_prime in self.accessible_states(s, a):
+            trans_prob = self.transition_model(s,a,s_prime)
+            probs.append(trans_prob)
+            print(f'\ts\'={s_prime}; T(s, a, s\')={trans_prob:.3f}; R(s\')={self.reward(s_prime):.3f}')
+        print(f'Total sum of probabilities: {sum(probs):.3f}')
 
     def policy_iteration(self, gamma, random_state=0, max_allowed_time=60, max_iter=100):
         '''Solve MDP with policy iteration.
@@ -70,10 +54,10 @@ class MarkovDecisionProcess:
             [0] * len(self.states)
         ))
 
-        pi = dict(zip(
-            self.states,
-            [random.choice(self.actions)] * len(self.states)
-        ))
+        pi = {
+            s: random.choice(self.available_actions(s))
+            for s in self.states
+        }
         
         iteration = 0
 
@@ -99,8 +83,12 @@ class MarkovDecisionProcess:
             policy_stable = True
             changed_values = 0
             for s in self.states:
-                action_values = pd.Series(index=self.actions, dtype=float)
-                for a in self.actions:
+                available_actions = self.available_actions(s)
+                if len(available_actions) == 1:
+                    pi[s] = available_actions[0]
+                    continue
+                action_values = pd.Series(index=available_actions, dtype=float)
+                for a in available_actions:
                     action_values.loc[a] = self.reward(s) + gamma * sum(
                         self.transition_model(s, a, s_prime) * V[s_prime]
                         for s_prime in self.accessible_states(s, a)
@@ -147,7 +135,7 @@ class MarkovDecisionProcess:
                         self.transition_model(s, a, s_prime) * V[s_prime]
                         for s_prime in self.accessible_states(s, a)
                     )
-                    for a in self.actions
+                    for a in self.available_actions(s)
                 )
                 abs_value_change = abs(proposed_value - V[s])
                 value_change.append(abs_value_change)
@@ -162,8 +150,12 @@ class MarkovDecisionProcess:
         pi = {}
             
         for s in self.states:
-            action_values = pd.Series(index=self.actions, dtype=float)
-            for a in self.actions:
+            available_actions = self.available_actions(s)
+            if len(available_actions) == 1:
+                pi[s] = available_actions[0]
+                continue
+            action_values = pd.Series(index=available_actions, dtype=float)
+            for a in available_actions:
                 action_values.loc[a] = self.reward(s) + gamma * sum(
                     self.transition_model(s, a, s_prime) * V[s_prime]
                     for s_prime in self.accessible_states(s, a)
@@ -183,32 +175,65 @@ class BlackjackMDP(MarkovDecisionProcess):
 
     def __init__(self):
         self.states = list(product(
-            range(2, 33, 1), # total point value of player's hand
-            range(2, 12), # what value shows for the dealer
+            range(2, 33), # total point value of player's hand
+            range(2, 33), # what value shows for the dealer
+            # range(0, 22), # player aces
+            # range(0, 22), # dealer aces
             ['hitting', 'stand'] # player state
         ))
-
+        
+        for any_point_value in range(2, 33):
+            for hitted_dealer_value in range(12, 33):
+                for player_ace in range(0, 22):
+                    for dealer_ace in range(0, 22):
+                        # we will never see this case if the player is still hitting
+                        self.states.remove((any_point_value, hitted_dealer_value, player_ace, dealer_ace, 'hitting'))
+        
         self.actions = ['hold', 'hit'] # to hit or not hit
         
-    def _get_player_state(self, s):
-        return s[-1]
+    def _standing(self, s):
+        return s[-1] == 'stand'
     
-    def _point_value(self, s):
+    def _player_aces(self, s):
+        return s[2]
+    
+    def _dealer_aces(self, s):
+        return s[3]
+    
+    def _player_point_value(self, s):
         return s[0]
+    
+    def _dealer_point_value(self, s):
+        return s[1]
+    
+    def available_actions(self, s):
+        if self._player_point_value(s) > 21 or self._standing(s):
+            return ['hold']
+        else:
+            return ['hold', 'hit']
 
     def accessible_states(self, s, a):
-        assert a in self.actions
+        assert a in self.available_actions(s)
         assert s in self.states
         
-        if self._get_player_state(s) == 'stand':
+        possibilities = []
+        
+        if self._dealer_point_value(s) >= DEALER_STAND_THRESHOLD or self._player_point_value(s) > MAX_HITTABLE_VALUE:
+            # terminal state reached
             return []
         
-        if a == 'hold' or self._point_value(s) >= 21:
-            return [ s[:2] + ('stand',) ] # only one option from here
+        if a == 'hold' and not self._standing(s):
+            return [ s[:-1] + ('stand',) ] # only one option from here
+        
+        if self._standing(s):
+            # dealer must be below threshold by this point
+            for additional_points in range(2, 12):
+                s_prime = list(copy(s))
+                s_prime[1] += additional_points
+                possibilities.append(tuple(s_prime))
+            return possibilities
         
         assert a == 'hit'
-        
-        possibilities = []
         
         for additional_points in range(2, 12):
             s_prime = list(copy(s))
@@ -223,7 +248,16 @@ class BlackjackMDP(MarkovDecisionProcess):
             return 1.0
         
         if a == 'hit':
-            value_change = self._point_value(s_prime) - self._point_value(s)
+            value_change = self._player_point_value(s_prime) - self._player_point_value(s)
+            assert value_change > 0
+            
+            if (2 <= value_change <= 9) or value_change == 11:
+                return 1 / 13
+            elif value_change == 10:
+                return 4 / 13
+        
+        if a == 'hold':
+            value_change = self._dealer_point_value(s_prime) - self._dealer_point_value(s)
             assert value_change > 0
             
             if (2 <= value_change <= 9) or value_change == 11:
@@ -234,32 +268,39 @@ class BlackjackMDP(MarkovDecisionProcess):
         raise Exception('Unexpected case')
 
     def reward(self, s):
-        if self._get_player_state(s) == 'hitting':
+        if self._player_point_value(s) > 21:
+            return LOSE
+        if not self._standing(s) or self._dealer_point_value(s) < DEALER_STAND_THRESHOLD:
             # here we are not in stand mode, which means no reward yet
             return 0
-
-        if self._point_value(s) > 21:
-            return LOSE
-        if self._point_value(s) == 21:
+        if self._player_point_value(s) == 21:
+            return WIN
+        if self._dealer_point_value(s) > 21:
             return WIN
         
-        reward_sequence = []
+        if self._player_point_value(s) > self._dealer_point_value(s):
+            return WIN
+        return LOSE
         
-        for _ in range(2000):
-            dealer_cards = [s[1], deal()]
-            while dealer_hit(dealer_cards):
-                dealer_cards.append(deal())
-                if bust(dealer_cards):
-                    reward_sequence.append(WIN)
-            if self._point_value(s) >= hand_value(dealer_cards):
-                reward_sequence.append(WIN)
-            else:
-                reward_sequence.append(LOSE)
-        
-        return np.average(reward_sequence)
 
 mdp = BlackjackMDP()
-# pi_star = mdp.policy_iteration(0.04)
-# pi_star = mdp.value_iteration(0.05, max_allowed_time=180)
 
 
+mdp._sample_state_layout()
+
+for s in mdp.accessible_states((11, 3, 'hitting'), 'hit'):
+    print(s, mdp.reward(s))
+mdp.transition_model((19, 6, 'hitting'), 'hold', (19, 8, 'hitting'))
+blackjack_policy = mdp.policy_iteration(0.99)
+blackjack_policy = mdp.value_iteration(0.05, max_allowed_time=180)
+
+policy_visualization = pd.DataFrame(
+    index=pd.Index(range(2, 12), name='Dealer Value'),
+    columns=pd.Index(range(2, 22), name='Player Value'),
+    dtype='string'
+)
+for i in range(2, 12):
+    for j in range(2, 22):
+        policy_visualization.loc[i, j] = blackjack_policy[(j, i, 'hitting')]
+
+policy_visualization.iloc[:, 5:15]
