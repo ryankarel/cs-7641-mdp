@@ -1,40 +1,32 @@
 """Set up blackjack problem."""
 
 import numpy as np
+import pandas as pd
 from itertools import product
 import random
+import time
+
+from copy import copy
 
 LOSE = -1
 WIN = 1
 
-verbose = True
+verbose = False
 
 
 def deal():
-    probabilities = np.array([1.0] * 9 + [4.0])
+    probabilities = np.array([1.0] * 8 + [4.0] + [1.0])
     probabilities /= probabilities.sum()
     random_card_value = np.random.choice(
-        range(1, 11),
+        range(2, 12),
         p=probabilities
     )
     return random_card_value
 
 
-def hit(player_value, player_aces, dealer_card):
-    return np.random.choice([True, False])
-
-
 def dealer_hit(cards):
     if verbose: print(f'Dealer cards: {cards}')
-    if aces(cards) == 0:
-        return sum(cards) < 17
-    else:
-        return sum(cards) <= 17
-
-
-def aces(cards):
-    num_aces = len([card for card in cards if card == 1])
-    return num_aces
+    return sum(cards) < 17
 
 
 def bust(cards):
@@ -43,20 +35,8 @@ def bust(cards):
 
 def hand_value(cards):
     face_value = sum(cards)
-    num_aces = aces(cards)
-    if num_aces == 0:
-        return face_value
-    else:
-        non_ace_cards = [card for card in cards if card != 1]
-        ace_cards = [card for card in cards if card == 1]
-        one_11 = sum(non_ace_cards) + sum(ace_cards[:-1]) + 11
-        if one_11 <= 21:
-            return one_11
-        else:
-            all_1s = sum(non_ace_cards) + sum(ace_cards)
-            return all_1s
-
-
+    return face_value
+        
 
 def compare_hands(player_cards, dealer_cards):
     if verbose:
@@ -69,33 +49,6 @@ def compare_hands(player_cards, dealer_cards):
         return LOSE
 
 
-def game():
-
-    player_cards = [deal(), deal()]
-    dealer_cards = [deal(), deal()]
-
-    dealer_card = dealer_cards[0]
-
-    while hit(sum(player_cards), aces(player_cards), dealer_card):
-        if verbose: print('Player hitting')
-        player_cards.append(deal())
-        if bust(player_cards):
-            if verbose: print('Player bust')
-            return LOSE
-    if verbose: print('Player stays')
-
-    while dealer_hit(dealer_cards):
-        if verbose: print('Dealer hitting')
-        dealer_cards.append(deal())
-        if bust(dealer_cards):
-            if verbose: print('Dealer bust')
-            return WIN
-
-    return compare_hands(player_cards, dealer_cards)
-
-game()
-
-
 class MarkovDecisionProcess:
 
     def __init__(self, states, actions, transition_model, reward, accessible_states):
@@ -105,120 +58,208 @@ class MarkovDecisionProcess:
         self.reward = reward # a callable
         self.accessible_states = accessible_states # a callable
 
-    def policy_iteration(self, theta, random_state, max_allowed_time, max_iter):
+    def policy_iteration(self, gamma, random_state=0, max_allowed_time=60, max_iter=100):
+        '''Solve MDP with policy iteration.
+        
+        https://www.cs.cmu.edu/afs/cs/project/jair/pub/volume4/kaelbling96a-html/node20.html
+        '''
+        start = time.time()
         # randomly initialize value function
         V = dict(zip(
             self.states,
-            np.random.random_sample(len(self.states))
+            [0] * len(self.states)
         ))
 
         pi = dict(zip(
             self.states,
             [random.choice(self.actions)] * len(self.states)
         ))
+        
+        iteration = 0
 
-        # for...?
-        change_in_value = 0
+        terminate_algorithm = False
+        while not terminate_algorithm:
+            iteration += 1
+            if time.time() - start > max_allowed_time:
+                print('Time ran out!')
+                break
+            if iteration > max_iter:
+                print('Too many iterations.')
+                break
+            # policy evaluation
+            for s in self.states:
+                v = V[s]
+                recommended_action = pi[s]
+                V[s] = self.reward(s) + gamma * sum(
+                    self.transition_model(s, recommended_action, s_prime) * V[s_prime]
+                    for s_prime in self.accessible_states(s, recommended_action)
+                )
+            
+            # policy improvement
+            policy_stable = True
+            changed_values = 0
+            for s in self.states:
+                action_values = pd.Series(index=self.actions, dtype=float)
+                for a in self.actions:
+                    action_values.loc[a] = self.reward(s) + gamma * sum(
+                        self.transition_model(s, a, s_prime) * V[s_prime]
+                        for s_prime in self.accessible_states(s, a)
+                    )
+                assert action_values.notnull().all()
+                new_recommended_action = action_values.idxmax()
+                if new_recommended_action != pi[s]:
+                    policy_stable = False
+                    changed_values += 1
+                pi[s] = new_recommended_action
+            print(f'At iteration {iteration}, changed policy values for {changed_values} states.')
+                
+            if policy_stable:
+                terminate_algorithm = True
+                
+        return pi
+
+    def value_iteration(self, gamma, epsilon=0.001, random_state=0, max_allowed_time=60, max_iter=100):
+        start = time.time()
+        # randomly initialize value function
+        V = dict(zip(
+            self.states,
+            [0] * len(self.states)
+        ))
+
+        iteration = 0
+
+        terminate_algorithm = False
+        while not terminate_algorithm:
+            max_change_in_value = 0
+            iteration += 1
+            if time.time() - start > max_allowed_time:
+                print('Time ran out!')
+                break
+            if iteration > max_iter:
+                print('Too many iterations.')
+                break
+            
+            value_change = []
+            
+            for s in self.states:
+                proposed_value = max(
+                    self.reward(s) + gamma * sum(
+                        self.transition_model(s, a, s_prime) * V[s_prime]
+                        for s_prime in self.accessible_states(s, a)
+                    )
+                    for a in self.actions
+                )
+                abs_value_change = abs(proposed_value - V[s])
+                value_change.append(abs_value_change)
+                max_change_in_value = max(max_change_in_value, abs_value_change)
+                V[s] = proposed_value
+                
+            avg_value_change = np.average(value_change)
+            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}; avg. change: {avg_value_change:.5f}')
+            if max_change_in_value < epsilon:
+                break
+            
+        pi = {}
+            
         for s in self.states:
-            v = V[s]
-            V[s] = sum(
-
-            )
-
-
+            action_values = pd.Series(index=self.actions, dtype=float)
+            for a in self.actions:
+                action_values.loc[a] = self.reward(s) + gamma * sum(
+                    self.transition_model(s, a, s_prime) * V[s_prime]
+                    for s_prime in self.accessible_states(s, a)
+                )
+            assert action_values.notnull().all()
+            pi[s] = action_values.idxmax()
+                
+        return pi
+        
 
 class BlackjackMDP(MarkovDecisionProcess):
+    '''Blackjack Markov Decision Process.
+    
+    Assume that aces are always worth eleven.
+    
+    '''
 
     def __init__(self):
-        # here a state is a 4-tuple that captures the total point value
-        # of a dealt hand, whether at least one ace is present
-        # in this hand, the face up card for the dealer, and finally
-        # whether the player is holding or not.
         self.states = list(product(
-            list(range(2, 33, 1)),
-            [0, 1],
-            list(range(1, 11)),
-            [0, 1]
+            range(2, 33, 1), # total point value of player's hand
+            range(2, 12), # what value shows for the dealer
+            ['hitting', 'stand'] # player state
         ))
-        # remove impossible states
-        for dealer_card in range(1, 11):
-            self.states.remove((2, 0, dealer_card))
-            self.states.remove((3, 0, dealer_card))
 
-        self.actions = [False, True] # to hit or not hit
+        self.actions = ['hold', 'hit'] # to hit or not hit
+        
+    def _get_player_state(self, s):
+        return s[-1]
+    
+    def _point_value(self, s):
+        return s[0]
 
     def accessible_states(self, s, a):
+        assert a in self.actions
+        assert s in self.states
+        
+        if self._get_player_state(s) == 'stand':
+            return []
+        
+        if a == 'hold' or self._point_value(s) >= 21:
+            return [ s[:2] + ('stand',) ] # only one option from here
+        
+        assert a == 'hit'
+        
         possibilities = []
-        if s[-1] == 1:
-            return possibilities # [], a terminal state with no remaining options
-        # could hold
-        holding = s.copy()
-        holding[-1] = 1
-        possibilities.append(holding)
-        if s[0] > 21 or a == False: # already bust and will now not hit
-            return possibilities
-        if s[1] == 1 and a == True: # already has at least one ace
-            for i in range(1, 12):
-                possible_hit = s.copy()
-                possible_hit[0] += i
-                possibilities.append(possible_hit)
-        elif s[1] == 0 and a == True:
-            # no aces yet
-            for new_ace_presence in [0, 1]:
-                for i in range(1, 12):
-                    if i == 1 and new_ace_presence == 1:
-                        continue
-                    possible_hit = s.copy()
-                    possible_hit[0] += i
-                    possible_hit[1] = new_ace_presence
-                    possibilities.append(possible_hit)
-        else:
-            raise Exception('Didnt expect this case when getting states')
+        
+        for additional_points in range(2, 12):
+            s_prime = list(copy(s))
+            s_prime[0] += additional_points
+            possibilities.append(tuple(s_prime))
         return possibilities
-
+        
     def transition_model(self, s, a, s_prime):
-        if s_prime[2] != s[2]:
-            return 0
-        if s == s_prime:
-            if a: # hitting
-                return 0 # no way can this happen
-            else:
-                return 1
-        diff = s_prime[0] - s[0]
-        if (diff < 0) or (diff > 11):
-            return 0
-        if s_prime[1] and not s[1]: # we're definitely getting an ace
-            if diff not in [1, 11]:
-                return 0
-            else:
-                return 1 / 13 # probability of getting an ace
-        if diff < 10 or diff == 11:
-            return 1 / 13
-        elif diff == 10:
-            return 4 / 13
-        else:
-            Exception('Didnt expect this case.')
+        accessibles = self.accessible_states(s, a)
+        assert s_prime in accessibles
+        if len(accessibles) == 1:
+            return 1.0
+        
+        if a == 'hit':
+            value_change = self._point_value(s_prime) - self._point_value(s)
+            assert value_change > 0
+            
+            if (2 <= value_change <= 9) or value_change == 11:
+                return 1 / 13
+            elif value_change == 10:
+                return 4 / 13
+            
+        raise Exception('Unexpected case')
 
     def reward(self, s):
-        if s[3] == 0: # check if we're holding or not
-            # here we are not holding, which means no reward (positive or
-            # negative) is coming, yet
+        if self._get_player_state(s) == 'hitting':
+            # here we are not in stand mode, which means no reward yet
             return 0
-        player_point_value = s[0]
-        if player_point_value > 21:
-            return LOSE
-        elif player_point_value == 21:
-            return WIN
 
-        dealer_cards = [s[2], deal()]
-        while dealer_hit(dealer_cards):
-            dealer_cards.append(deal())
-            if bust(dealer_cards):
-                return WIN
-        if player_point_value > hand_value(dealer_cards):
-            return WIN
-        else:
+        if self._point_value(s) > 21:
             return LOSE
+        if self._point_value(s) == 21:
+            return WIN
+        
+        reward_sequence = []
+        
+        for _ in range(2000):
+            dealer_cards = [s[1], deal()]
+            while dealer_hit(dealer_cards):
+                dealer_cards.append(deal())
+                if bust(dealer_cards):
+                    reward_sequence.append(WIN)
+            if self._point_value(s) >= hand_value(dealer_cards):
+                reward_sequence.append(WIN)
+            else:
+                reward_sequence.append(LOSE)
+        
+        return np.average(reward_sequence)
 
+mdp = BlackjackMDP()
+# pi_star = mdp.policy_iteration(0.04)
+# pi_star = mdp.value_iteration(0.05, max_allowed_time=180)
 
 
