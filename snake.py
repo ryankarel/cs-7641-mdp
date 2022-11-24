@@ -4,6 +4,9 @@ from mdp import MarkovDecisionProcess
 from itertools import product, permutations, combinations
 import numpy as np
 from copy import deepcopy
+import random
+
+import pickle
 
 
 def get_indices_where(b):
@@ -103,7 +106,7 @@ def valid_state(s):
     # now the tricky part, checking that a string of 1s exists
     return valid_snake(s)
 
-def get_states(board_length, max_snake_length, max_state_space, verbosity_rate=1000):
+def get_states(board_length, max_snake_length, max_state_space, verbosity_rate=100):
     directions = ['up', 'down', 'left', 'right']
     board_size = board_length ** 2
     index_options = range(board_length)
@@ -270,36 +273,4 @@ class SnakeMDP(MarkovDecisionProcess):
         return actions
         
         
-        
-
-example_1 = hashable_state(
-    (np.array([[0., 0., 0., 0., 0.],
-               [0., 0., 0., 0., 0.],
-               [0., 0., 0., 0., 0.],
-               [0., 0., 0., 0., 0.],
-               [3., 1., 1., 1., 2.]]),
-     'right')
-)
-
-example_2 = hashable_state(
-    (np.array([[0., 0., 0., 0., 0.],
-               [0., 0., 0., 0., 0.],
-               [0., 0., 0., 3., 0.],
-               [0., 0., 0., 2., 0.],
-               [0., 1., 1., 1., 0.]]),
-     'up')
-)
-s = example_2
-
-mdp = SnakeMDP(board_length=5, max_snake_length=7, max_state_space=2e5)
-
-
-snake_policy, snake_value = mdp.policy_iteration(gamma=0.5, epsilon=0.0001, max_allowed_time=720)
-
-# s = ((1.0, 1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 'down')
-# array_state(s)
-# array_state(mdp.accessible_states(s, 'down')[0])
-
-for s in random.sample(mdp.states, k=5):
-    print(f'\nFor state s = \n{array_state(s)}')
-    print(f'the recommended action is: {snake_policy[s]}')
+     

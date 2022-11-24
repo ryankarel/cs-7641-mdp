@@ -167,39 +167,53 @@ class MarkovDecisionProcess:
         return pi, V
         
     def Q_learning(self, gamma, epsilon=0.001, random_state=0, max_allowed_time=60, max_iter=100):
+        start = time.time()
         Q = {
             (s, a): 0
             for s in self.states
-            for a in self.accessible_states(s)
+            for a in self.available_actions(s)
         }
         pi = {
             s: random.choice(self.available_actions(s))
             for s in self.states
         }
         
-        Q_copy = deepcopy(Q)
+        iteration = 0
+        
         terminate_algorithm = False
         max_change_in_value = 0
         while not terminate_algorithm:
             max_change_in_value = 0
-            for s, a in Q:
+            iteration += 1
+            print(f'Beginning iteration i={iteration}')
+            if time.time() - start > max_allowed_time:
+                print('Time ran out!')
+                break
+            if iteration > max_iter:
+                print('Too many iterations.')
+                break
+            for j, (s, a) in enumerate(Q):
+                if j % 100 == 0: print(f'\tj={j}')
                 # sample new state s'
-                possible_s_prime = self.accessible_states(s)
+                possible_s_prime = self.accessible_states(s, a)
                 probabilities = [
                     self.transition_model(s, a, s_prime)
                     for s_prime in possible_s_prime
                 ]
-                s_prime = random.choices(possible_s_prime, probabilities)[0]
-                proposed_value = self.reward(s) + gamma * max(
-                    Q_copy[(s_prime, a_prime)]
-                    for a_prime in self.available_actions(s_prime)
-                )
+                if len(possible_s_prime) == 0:
+                    proposed_value = self.reward(s)
+                else:
+                    s_prime = random.choices(possible_s_prime, probabilities)[0]
+                    proposed_value = self.reward(s) + gamma * max(
+                        Q[(s_prime, a_prime)]
+                        for a_prime in self.available_actions(s_prime)
+                    )
                 max_change_in_value = max(
                     max_change_in_value,
                     abs(Q[(s, a)] - proposed_value)
                 )
                 Q[(s, a)] = proposed_value
-                Q_copy = deepcopy(Q)
+            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
             if max_change_in_value < epsilon:
                 terminate_algorithm = True
                 

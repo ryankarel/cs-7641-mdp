@@ -128,37 +128,3 @@ class SimplifiedBlackjackMDP(MarkovDecisionProcess):
             return WIN
         return LOSE
         
-
-mdp = SimplifiedBlackjackMDP()
-
-
-mdp._sample_state_layout()
-
-for s in mdp.accessible_states((11, 3, 'hitting'), 'hit'):
-    print(s, mdp.reward(s))
-mdp.transition_model((19, 6, 'hitting'), 'hold', (19, 6, 'stand'))
-
-blackjack_policy, blackjack_value = mdp.policy_iteration(gamma=0.99999, epsilon=1e-5)
-blackjack_policy, blackjack_value = mdp.value_iteration(gamma=0.99999, epsilon=1e-5)
-
-policy_visualization = pd.DataFrame(
-    index=pd.Index(range(2, 12), name='Dealer Value'),
-    columns=pd.Index(range(2, 22), name='Player Value'),
-    dtype='string'
-)
-for i in range(2, 12):
-    for j in range(2, 22):
-        policy_visualization.loc[i, j] = blackjack_policy[(j, i, 'hitting')]
-
-policy_visualization.iloc[:, 5:15]
-
-value_visualization = pd.DataFrame(
-    index=pd.Index(range(2, 12), name='Dealer Value'),
-    columns=pd.Index(range(2, 22), name='Player Value'),
-    dtype='float'
-)
-for i in range(2, 12):
-    for j in range(2, 22):
-        value_visualization.loc[i, j] = np.round(blackjack_value[(j, i, 'hitting')], 1)
-
-value_visualization.iloc[:, 5:15]
