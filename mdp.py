@@ -68,10 +68,14 @@ class MarkovDecisionProcess:
                 max_change_in_value = 0
                 for s in self.states:
                     recommended_action = pi[s]
-                    proposed = self.reward(s) + gamma * sum(
-                        self.transition_model(s, recommended_action, s_prime) * V[s_prime]
-                        for s_prime in self.accessible_states(s, recommended_action)
-                    )
+                    try:
+                        proposed = self.reward(s) + gamma * sum(
+                            self.transition_model(s, recommended_action, s_prime) * V[s_prime]
+                            for s_prime in self.accessible_states(s, recommended_action)
+                        )
+                    except Exception:
+                        print(s, recommended_action)
+                        raise
                     max_change_in_value = max(max_change_in_value, abs(proposed - V[s]))
                     V[s] = proposed
                 

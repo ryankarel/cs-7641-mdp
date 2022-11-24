@@ -110,7 +110,7 @@ def get_states(board_length, max_snake_length, max_state_space, verbosity_rate=1
     all_indices = list(product(index_options, index_options))
     
     states = []
-    for i in range(1, max_snake_length + 1):
+    for i in range(1, max_snake_length): # don't want to actually have max snake length be equal to i at any point
         new_choices = combinations(all_indices, i)
         print(
             f'Trying max snake length {i} with '
@@ -182,11 +182,11 @@ class SnakeMDP(MarkovDecisionProcess):
     def reward(self, s):
         if s[0] is None:
             return self.LOSE
+        if s[0] == 'WIN':
+            return self.WIN
         best_one_path, ones = states_longest_path_of_ones(
             array_state(s)
         )
-        if len(best_one_path) == self.max_snake_length - 1:
-            return self.WIN
         return len(best_one_path) * self.exist_factor
     
     def accessible_states(self, s, a):
@@ -232,6 +232,8 @@ class SnakeMDP(MarkovDecisionProcess):
                 last_1_location = best_one_path[-1]
                 new_array[last_1_location] = 0
                 new_array[current_location_of_2] = 1
+            else:
+                new_array[current_location_of_2] = 0
             new_array[next_two_location] = 2
             return [hashable_state((new_array, new_direction))]
             
@@ -291,8 +293,9 @@ s = example_2
 
 mdp = SnakeMDP(board_length=5, max_snake_length=3)
 
-mdp.accessible_states(example_1)
 
-mdp.policy_iteration(gamma=0.7, epsilon=0.00001)
+snake_policy, snake_value = mdp.policy_iteration(gamma=0.95, epsilon=0.0001)
 
-        
+# s = ((1.0, 1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 'down')
+# array_state(s)
+# array_state(mdp.accessible_states(s, 'down')[0])
