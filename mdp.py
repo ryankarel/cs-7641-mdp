@@ -9,6 +9,7 @@ import random
 import numpy as np
 import time
 import pandas as pd
+from copy import deepcopy
 
 class MarkovDecisionProcess:
 
@@ -164,4 +165,51 @@ class MarkovDecisionProcess:
             pi[s] = action_values.idxmax()
                 
         return pi, V
+        
+    def Q_learning(self, gamma, epsilon=0.001, random_state=0, max_allowed_time=60, max_iter=100):
+        Q = {
+            (s, a): 0
+            for s in self.states
+            for a in self.accessible_states(s)
+        }
+        pi = {
+            s: random.choice(self.available_actions(s))
+            for s in self.states
+        }
+        
+        Q_copy = deepcopy(Q)
+        terminate_algorithm = False
+        max_change_in_value = 0
+        while not terminate_algorithm:
+            max_change_in_value = 0
+            for s, a in Q:
+                # sample new state s'
+                possible_s_prime = self.accessible_states(s)
+                probabilities = [
+                    self.transition_model(s, a, s_prime)
+                    for s_prime in possible_s_prime
+                ]
+                s_prime = random.choices(possible_s_prime, probabilities)[0]
+                proposed_value = self.reward(s) + gamma * max(
+                    Q_copy[(s_prime, a_prime)]
+                    for a_prime in self.available_actions(s_prime)
+                )
+                max_change_in_value = max(
+                    max_change_in_value,
+                    abs(Q[(s, a)] - proposed_value)
+                )
+                Q[(s, a)] = proposed_value
+                Q_copy = deepcopy(Q)
+            if max_change_in_value < epsilon:
+                terminate_algorithm = True
+                
+        for s in pi:
+            Q_a = {
+                a: Q[(s, a)]
+                for a in self.available_actions(s)
+            }
+            pi[s] = max(Q_a, key=Q_a.get)
+            
+        return pi, Q
+                
         

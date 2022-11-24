@@ -291,11 +291,15 @@ example_2 = hashable_state(
 )
 s = example_2
 
-mdp = SnakeMDP(board_length=5, max_snake_length=3)
+mdp = SnakeMDP(board_length=5, max_snake_length=7, max_state_space=2e5)
 
 
-snake_policy, snake_value = mdp.policy_iteration(gamma=0.95, epsilon=0.0001)
+snake_policy, snake_value = mdp.policy_iteration(gamma=0.5, epsilon=0.0001, max_allowed_time=720)
 
 # s = ((1.0, 1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 'down')
 # array_state(s)
 # array_state(mdp.accessible_states(s, 'down')[0])
+
+for s in random.sample(mdp.states, k=5):
+    print(f'\nFor state s = \n{array_state(s)}')
+    print(f'the recommended action is: {snake_policy[s]}')
