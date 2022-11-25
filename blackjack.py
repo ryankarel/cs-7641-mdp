@@ -37,6 +37,12 @@ class SimplifiedBlackjackMDP(MarkovDecisionProcess):
         
         self.actions = ['hold', 'hit'] # to hit or not hit
         
+        self.initial_states = list(product(
+            range(2, 21), # total point value of player's hand
+            range(2, 11), # what value shows for the dealer
+            ['hitting'] # player state
+        ))
+        
     def _standing(self, s):
         return s[-1] == 'stand'
     

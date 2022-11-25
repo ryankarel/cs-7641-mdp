@@ -113,6 +113,7 @@ def get_states(board_length, max_snake_length, max_state_space, verbosity_rate=1
     all_indices = list(product(index_options, index_options))
     
     states = []
+    initial_states = []
     for i in range(1, max_snake_length): # don't want to actually have max snake length be equal to i at any point
         new_choices = combinations(all_indices, i)
         print(
@@ -138,12 +139,14 @@ def get_states(board_length, max_snake_length, max_state_space, verbosity_rate=1
                         candidate_state = (board_copy_copy, d)
                         if valid_state(candidate_state):
                             states.append(candidate_state)
+                            if i == 1:
+                                initial_states.append(candidate_state)
                             if len(states) % verbosity_rate == 0:
                                 print(f'{len(states):,.0f} states found...')
                             if len(states) >= max_state_space:
                                 print(f'i: {i}')
                                 return states
-    return states
+    return states, initial_states
 
 def hashable_state(s):
     board, direction = s
