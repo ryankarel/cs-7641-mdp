@@ -30,7 +30,7 @@ class MarkovDecisionProcess:
         self.reward = reward # a callable
         self.accessible_states = accessible_states # a callable
         self.available_actions = None # a callable
-        self.initial_states = # a list, just for Q-learning
+        self.initial_states = None # a list, just for Q-learning
         
     def _sample_state_layout(self):
         s = random.choice(self.states)
@@ -240,17 +240,24 @@ class MarkovDecisionProcess:
             # episode
             while s is not None:
                 # randomly select an action
-                if exploration = 'uniform':
+                if exploration == 'uniform':
                     a = random.choice(self.available_actions(s))
+                elif exploration == 'q-optimal':
+                    Q_a = {
+                        a: Q[(s, a)]
+                        for a in self.available_actions(s)
+                    }
+                    pi[s] = max(Q_a, key=Q_a.get)
                 else:
                     raise ValueError(f'Unexpected exploration strategy = \'{exploration}\'')
                     
+                print(s, a)
                 visits[(s, a)] += 1
                 
-                if decay_pattern = 'mitchell':
+                if decay_pattern == 'mitchell':
                     # use the approach outlined in the book
                     alpha = 1 / (1 + visits[(s, a)])
-                elif decay_pattern = 'iteration_based':
+                elif decay_pattern == 'iteration_based':
                     alpha = iteration_based_decay_factor ** iteration
                 else:
                     raise ValueError(f'Unexpected decay_pattern = \'{decay_pattern}\'')
@@ -262,8 +269,10 @@ class MarkovDecisionProcess:
                     for s_prime in possible_s_prime
                 ]
                 if len(possible_s_prime) == 0:
+                    print('No options')
                     proposed_value = self.reward(s)
                 else:
+                    print('Some options')
                     s_prime = random.choices(possible_s_prime, probabilities)[0]
                     proposed_value = self.reward(s) + gamma * max(
                         Q[(s_prime, a_prime)]
@@ -273,13 +282,13 @@ class MarkovDecisionProcess:
                     max_change_in_value,
                     abs(Q[(s, a)] - proposed_value)
                 )
+                Q[(s, a)] = alpha * Q[(s, a)] + (1 - alpha) * proposed_value
                 
                 if len(possible_s_prime) == 0:
                     s = None
                 else:
                     s = s_prime
                     
-                Q[(s, a)] = alpha * Q[(s, a)] + (1 - alpha) * proposed_value
             # episode over
                     
             print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')

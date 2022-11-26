@@ -169,10 +169,11 @@ class SnakeMDP(MarkovDecisionProcess):
         self.max_snake_length = max_snake_length
         self.board_length = board_length
         
-        board_states = get_states(board_length=board_length, max_snake_length=max_snake_length, max_state_space=max_state_space)
+        board_states, initial_states = get_states(board_length=board_length, max_snake_length=max_snake_length, max_state_space=max_state_space)
         
         # need to convert these states into something hashable
         self.states = [hashable_state(s) for s in board_states]
+        self.initial_states = [hashable_state(s) for s in initial_states]
         self.actions = ['up', 'down', 'left', 'right']
         
         # add 8 extra states to the list of possible states to capture the OOB locations
@@ -264,7 +265,7 @@ class SnakeMDP(MarkovDecisionProcess):
         raise Exception('Whoa...')
     
     def available_actions(self, s):
-        _, direction = s
+        board, direction = s
         if direction == 'up': opposite = 'down'
         elif direction == 'down': opposite = 'up'
         elif direction == 'left': opposite = 'right'
@@ -272,7 +273,8 @@ class SnakeMDP(MarkovDecisionProcess):
         else: raise Exception('Unexpected...')
         
         actions = deepcopy(self.actions)
-        actions.remove(opposite)
+        if board != 'WIN' and board is not None:
+            actions.remove(opposite)
         return actions
         
         
