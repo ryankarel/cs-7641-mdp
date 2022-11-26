@@ -41,7 +41,7 @@ class MarkovDecisionProcess:
             #print(f'\ts\'={s_prime}; T(s, a, s\')={trans_prob:.3f}; R(s\')={self.reward(s_prime):.3f}')
         #print(f'Total sum of probabilities: {sum(probs):.3f}')
 
-    def policy_iteration(self, gamma=0.99, epsilon=0.01, random_state=0, max_allowed_time=60, max_iter=100):
+    def policy_iteration(self, gamma=0.99, epsilon=0.01, random_state=0, max_allowed_time=1200, max_iter=100):
         '''Solve MDP with policy iteration.
         
         https://www.cs.cmu.edu/afs/cs/project/jair/pub/volume4/kaelbling96a-html/node20.html
@@ -117,7 +117,7 @@ class MarkovDecisionProcess:
                 
         return pi, V, stats
 
-    def value_iteration(self, gamma=0.99, epsilon=0.01, random_state=0, max_allowed_time=60, max_iter=100):
+    def value_iteration(self, gamma=0.99, epsilon=0.01, random_state=0, max_allowed_time=1200, max_iter=100):
         stats = initialize_statistics()
         start = time.time()
         # randomly initialize value function
@@ -182,7 +182,7 @@ class MarkovDecisionProcess:
         
     def Q_learning(
             self, gamma=0.99, epsilon=0.01, decay_pattern='mitchell', initialization='zeros', exploration='q-optimal',
-            random_state=0, max_allowed_time=60, max_iter=10000, iteration_based_decay_factor=0.99, terminate_with='average'
+            random_state=0, max_allowed_time=1200, max_iter=10000, iteration_based_decay_factor=0.99, terminate_with='average'
         ):
         # need episodic learning
         # need different decay patterns to use Q_n = alpha_n Q_n-1 + (1 - alpha_n) *(r + gamma Qn-1(s', a'))
@@ -326,7 +326,7 @@ class MarkovDecisionProcess:
             
         return pi, Q, stats
         
-    def brute_Q_learning(self, gamma, epsilon=0.001, decay_pattern='mitchell', random_state=0, max_allowed_time=60, max_iter=100):
+    def brute_Q_learning(self, gamma, epsilon=0.001, decay_pattern='mitchell', random_state=0, max_allowed_time=1200, max_iter=100):
         start = time.time()
         Q = {
             (s, a): 0
