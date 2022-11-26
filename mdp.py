@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Nov 22 12:33:13 2022
 
-@author: rache
-"""
 
 import random
 import numpy as np
@@ -187,7 +182,7 @@ class MarkovDecisionProcess:
         
     def Q_learning(
             self, gamma=0.99, epsilon=0.01, decay_pattern='mitchell', initialization='zeros', exploration='q-optimal',
-            random_state=0, max_allowed_time=60, max_iter=10000, iteration_based_decay_factor=0.99
+            random_state=0, max_allowed_time=60, max_iter=10000, iteration_based_decay_factor=0.99, terminate_with='average'
         ):
         # need episodic learning
         # need different decay patterns to use Q_n = alpha_n Q_n-1 + (1 - alpha_n) *(r + gamma Qn-1(s', a'))
@@ -224,6 +219,7 @@ class MarkovDecisionProcess:
         max_change_in_value = 0
         while not terminate_algorithm:
             max_change_in_value = 0
+            change_in_value_seq = []
             iteration += 1
             iteration_start = time.time()
             #print(f'Beginning iteration i={iteration}')
@@ -309,9 +305,84 @@ class MarkovDecisionProcess:
                     max_change_in_value,
                     abs(ending_Q_value - beginning_Q_value)
                 )
+                change_in_value_seq.append(abs(ending_Q_value - beginning_Q_value))
                     
-            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
+            avg_change_in_value = np.average(change_in_value_seq)
+            #print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}; avg_change_in_value={avg_change_in_value:.5f}')
             stats = update_stats(stats, iteration, time.time() - iteration_start, max_change_in_value)
+            if terminate_with == 'max' and max_change_in_value < epsilon:
+                terminate_algorithm = True
+            elif terminate_with == 'average' and avg_change_in_value < epsilon:
+                terminate_algorithm = True
+            else:
+                assert max_change_in_value > epsilon
+                
+        for s in pi:
+            Q_a = {
+                a: Q[(s, a)]
+                for a in self.available_actions(s)
+            }
+            pi[s] = max(Q_a, key=Q_a.get)
+            
+        return pi, Q, stats
+        
+    def brute_Q_learning(self, gamma, epsilon=0.001, decay_pattern='mitchell', random_state=0, max_allowed_time=60, max_iter=100):
+        start = time.time()
+        Q = {
+            (s, a): 0
+            for s in self.states
+            for a in self.available_actions(s)
+        }
+        pi = {
+            s: random.choice(self.available_actions(s))
+            for s in self.states
+        }
+        
+        iteration = 0
+        
+        terminate_algorithm = False
+        max_change_in_value = 0
+        while not terminate_algorithm:
+            max_change_in_value = 0
+            iteration += 1
+            #print(f'Beginning iteration i={iteration}')
+            if time.time() - start > max_allowed_time:
+                #print('Time ran out!')
+                break
+            if iteration > max_iter:
+                #print('Too many iterations.')
+                break
+            for j, (s, a) in enumerate(Q):
+                #if j % 100 == 0: print(f'\tj={j}')
+                # sample new state s'
+                possible_s_prime = self.accessible_states(s, a)
+                probabilities = [
+                    self.transition_model(s, a, s_prime)
+                    for s_prime in possible_s_prime
+                ]
+                if len(possible_s_prime) == 0:
+                    proposed_value = self.reward(s)
+                else:
+                    s_prime = random.choices(possible_s_prime, probabilities)[0]
+                    proposed_value = self.reward(s) + gamma * max(
+                        Q[(s_prime, a_prime)]
+                        for a_prime in self.available_actions(s_prime)
+                    )
+                max_change_in_value = max(
+                    max_change_in_value,
+                    abs(Q[(s, a)] - proposed_value)
+                )
+                
+                if decay_pattern == 'mitchell':
+                    # use the approach outlined in the book
+                    alpha = 1 / (1 + visits[(s, a)])
+                elif decay_pattern == 'iteration_based':
+                    alpha = iteration_based_decay_factor ** iteration
+                else:
+                    raise ValueError(f'Unexpected decay_pattern = \'{decay_pattern}\'')
+                    
+                Q[(s, a)] = alpha * Q[(s, a)] + (1 - alpha) * proposed_value
+            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
             if max_change_in_value < epsilon:
                 terminate_algorithm = True
                 
@@ -322,6 +393,6 @@ class MarkovDecisionProcess:
             }
             pi[s] = max(Q_a, key=Q_a.get)
             
-        return pi, Q, stats
+        return pi, Q
                 
         
