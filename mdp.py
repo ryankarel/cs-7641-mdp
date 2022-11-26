@@ -310,6 +310,9 @@ class MarkovDecisionProcess:
             avg_change_in_value = np.average(change_in_value_seq)
             #print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}; avg_change_in_value={avg_change_in_value:.5f}')
             stats = update_stats(stats, iteration, time.time() - iteration_start, max_change_in_value)
+            # don't terminate until at least iteration 100
+            if iteration < 100:
+                continue
             if terminate_with == 'max' and max_change_in_value < epsilon:
                 terminate_algorithm = True
             elif terminate_with == 'average' and avg_change_in_value < epsilon:
