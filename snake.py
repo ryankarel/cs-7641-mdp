@@ -180,13 +180,21 @@ class SnakeMDP(MarkovDecisionProcess):
         for a in self.actions:
             self.states.append((None, a))
             self.states.append(('WIN', a))
+            
+        self.reward_lookup = {
+            s: self.reward_substance(s)
+            for s in self.states
+        }
         
     def transition_model(self, s, a, s_prime):
         accessibles = self.accessible_states(s, a)
         assert s_prime in accessibles
         return 1.0 / len(accessibles)
-    
+        
     def reward(self, s):
+        return self.reward_lookup[s]
+    
+    def reward_substance(self, s):
         if s[0] is None:
             return self.LOSE
         if s[0] == 'WIN':

@@ -34,19 +34,19 @@ class MarkovDecisionProcess:
         
     def _sample_state_layout(self):
         s = random.choice(self.states)
-        print(f'Randomly sampled state: {s}')
+        #print(f'Randomly sampled state: {s}')
         available_actions = self.available_actions(s)
-        print(f'Available actions: {available_actions}')
+        #print(f'Available actions: {available_actions}')
         a = random.choice(available_actions)
-        print(f'Available states from s={s} and a={a}:')
+        #print(f'Available states from s={s} and a={a}:')
         probs = []
         for s_prime in self.accessible_states(s, a):
             trans_prob = self.transition_model(s,a,s_prime)
             probs.append(trans_prob)
-            print(f'\ts\'={s_prime}; T(s, a, s\')={trans_prob:.3f}; R(s\')={self.reward(s_prime):.3f}')
-        print(f'Total sum of probabilities: {sum(probs):.3f}')
+            #print(f'\ts\'={s_prime}; T(s, a, s\')={trans_prob:.3f}; R(s\')={self.reward(s_prime):.3f}')
+        #print(f'Total sum of probabilities: {sum(probs):.3f}')
 
-    def policy_iteration(self, gamma=0.99, epsilon=0.001, random_state=0, max_allowed_time=60, max_iter=100):
+    def policy_iteration(self, gamma=0.99, epsilon=0.01, random_state=0, max_allowed_time=60, max_iter=100):
         '''Solve MDP with policy iteration.
         
         https://www.cs.cmu.edu/afs/cs/project/jair/pub/volume4/kaelbling96a-html/node20.html
@@ -72,10 +72,10 @@ class MarkovDecisionProcess:
             iteration += 1
             iteration_start = time.time()
             if time.time() - start > max_allowed_time:
-                print('Time ran out!')
+                #print('Time ran out!')
                 break
             if iteration > max_iter:
-                print('Too many iterations.')
+                #print('Too many iterations.')
                 break
             # policy evaluation
             max_change_in_value = epsilon + 1 # anything strictly greater than epsilon
@@ -89,7 +89,7 @@ class MarkovDecisionProcess:
                             for s_prime in self.accessible_states(s, recommended_action)
                         )
                     except Exception:
-                        print(s, recommended_action)
+                        #print(s, recommended_action)
                         raise
                     max_change_in_value = max(max_change_in_value, abs(proposed - V[s]))
                     V[s] = proposed
@@ -114,7 +114,7 @@ class MarkovDecisionProcess:
                     policy_stable = False
                     changed_values += 1
                 pi[s] = new_recommended_action
-            print(f'At iteration {iteration}, changed policy values for {changed_values} states.')
+            #print(f'At iteration {iteration}, changed policy values for {changed_values} states.')
             stats = update_stats(stats, iteration, time.time() - iteration_start, changed_values)
                 
             if policy_stable:
@@ -122,7 +122,7 @@ class MarkovDecisionProcess:
                 
         return pi, V, stats
 
-    def value_iteration(self, gamma=0.99, epsilon=0.001, random_state=0, max_allowed_time=60, max_iter=100):
+    def value_iteration(self, gamma=0.99, epsilon=0.01, random_state=0, max_allowed_time=60, max_iter=100):
         stats = initialize_statistics()
         start = time.time()
         # randomly initialize value function
@@ -139,10 +139,10 @@ class MarkovDecisionProcess:
             iteration += 1
             iteration_start = time.time()
             if time.time() - start > max_allowed_time:
-                print('Time ran out!')
+                #print('Time ran out!')
                 break
             if iteration > max_iter:
-                print('Too many iterations.')
+                #print('Too many iterations.')
                 break
             
             value_change = []
@@ -161,7 +161,7 @@ class MarkovDecisionProcess:
                 V[s] = proposed_value
                 
             avg_value_change = np.average(value_change)
-            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}; avg. change: {avg_value_change:.5f}')
+            #print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}; avg. change: {avg_value_change:.5f}')
             
             stats = update_stats(stats, iteration, time.time() - iteration_start, max_change_in_value)
             if max_change_in_value < epsilon:
@@ -186,7 +186,7 @@ class MarkovDecisionProcess:
         return pi, V, stats
         
     def Q_learning(
-            self, gamma=0.99, epsilon=0.001, decay_pattern='mitchell', initialization='zeros', exploration='uniform',
+            self, gamma=0.99, epsilon=0.01, decay_pattern='mitchell', initialization='zeros', exploration='uniform',
             random_state=0, max_allowed_time=60, max_iter=10000, iteration_based_decay_factor=0.99
         ):
         # need episodic learning
@@ -226,72 +226,81 @@ class MarkovDecisionProcess:
             max_change_in_value = 0
             iteration += 1
             iteration_start = time.time()
-            print(f'Beginning iteration i={iteration}')
+            #print(f'Beginning iteration i={iteration}')
             if time.time() - start > max_allowed_time:
-                print('Time ran out!')
+                #print('Time ran out!')
                 break
             if iteration > max_iter:
-                print('Too many iterations.')
+                #print('Too many iterations.')
                 break
-            
-            # randomly start somewhere
-            s = random.choice(self.initial_states)
-            
-            # episode
-            while s is not None:
-                # randomly select an action
-                if exploration == 'uniform':
-                    a = random.choice(self.available_actions(s))
-                elif exploration == 'q-optimal':
-                    Q_a = {
-                        a: Q[(s, a)]
-                        for a in self.available_actions(s)
-                    }
-                    pi[s] = max(Q_a, key=Q_a.get)
-                else:
-                    raise ValueError(f'Unexpected exploration strategy = \'{exploration}\'')
-                    
-                print(s, a)
-                visits[(s, a)] += 1
                 
-                if decay_pattern == 'mitchell':
-                    # use the approach outlined in the book
-                    alpha = 1 / (1 + visits[(s, a)])
-                elif decay_pattern == 'iteration_based':
-                    alpha = iteration_based_decay_factor ** iteration
-                else:
-                    raise ValueError(f'Unexpected decay_pattern = \'{decay_pattern}\'')
+            Q_start = deepcopy(Q)
+                
+            for s0 in self.initial_states:
+                # start at each of the beginning locations
+                s = deepcopy(s0)
+                first_iteration = True
+                # episode
+                while s is not None:
+                    # randomly select an action
+                    if exploration == 'uniform':
+                        a = random.choice(self.available_actions(s))
+                    elif exploration == 'q-optimal':
+                        Q_a = {
+                            a: Q[(s, a)]
+                            for a in self.available_actions(s)
+                        }
+                        a = max(Q_a, key=Q_a.get)
+                    else:
+                        raise ValueError(f'Unexpected exploration strategy = \'{exploration}\'')
+                        
+                    if first_iteration:
+                        first_iteration = False
+                        a0 = deepcopy(a)
                     
-                # choose s'
-                possible_s_prime = self.accessible_states(s, a)
-                probabilities = [
-                    self.transition_model(s, a, s_prime)
-                    for s_prime in possible_s_prime
-                ]
-                if len(possible_s_prime) == 0:
-                    print('No options')
-                    proposed_value = self.reward(s)
-                else:
-                    print('Some options')
-                    s_prime = random.choices(possible_s_prime, probabilities)[0]
-                    proposed_value = self.reward(s) + gamma * max(
-                        Q[(s_prime, a_prime)]
-                        for a_prime in self.available_actions(s_prime)
-                    )
+                    visits[(s, a)] += 1
+                    print(s, a)
+                    
+                    if decay_pattern == 'mitchell':
+                        # use the approach outlined in the book
+                        alpha = 1 / (1 + visits[(s, a)])
+                    elif decay_pattern == 'iteration_based':
+                        alpha = iteration_based_decay_factor ** iteration
+                    else:
+                        raise ValueError(f'Unexpected decay_pattern = \'{decay_pattern}\'')
+                        
+                    # choose s'
+                    possible_s_prime = self.accessible_states(s, a)
+                    probabilities = [
+                        self.transition_model(s, a, s_prime)
+                        for s_prime in possible_s_prime
+                    ]
+                    if len(possible_s_prime) == 0:
+                        proposed_value = self.reward(s)
+                    else:
+                        s_prime = random.choices(possible_s_prime, probabilities)[0]
+                        proposed_value = self.reward(s) + gamma * max(
+                            Q[(s_prime, a_prime)]
+                            for a_prime in self.available_actions(s_prime)
+                        )
+                    
+                    Q[(s, a)] = alpha * Q[(s, a)] + (1 - alpha) * proposed_value
+                    
+                    if len(possible_s_prime) == 0:
+                        s = None
+                    else:
+                        s = s_prime
+                    
+                # episode over
+                
+                beginning_Q_value = Q_start[(s0, a0)]
+                ending_Q_value = Q[(s0, a0)]
                 max_change_in_value = max(
                     max_change_in_value,
-                    abs(Q[(s, a)] - proposed_value)
+                    abs(ending_Q_value - beginning_Q_value)
                 )
-                Q[(s, a)] = alpha * Q[(s, a)] + (1 - alpha) * proposed_value
-                
-                if len(possible_s_prime) == 0:
-                    s = None
-                else:
-                    s = s_prime
                     
-            # episode over
-                    
-            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
+            #print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
             stats = update_stats(stats, iteration, time.time() - iteration_start, max_change_in_value)
             if max_change_in_value < epsilon:
                 terminate_algorithm = True
