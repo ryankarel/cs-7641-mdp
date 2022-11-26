@@ -186,7 +186,7 @@ class MarkovDecisionProcess:
         return pi, V, stats
         
     def Q_learning(
-            self, gamma=0.99, epsilon=0.01, decay_pattern='mitchell', initialization='zeros', exploration='uniform',
+            self, gamma=0.99, epsilon=0.01, decay_pattern='mitchell', initialization='zeros', exploration='q-optimal',
             random_state=0, max_allowed_time=60, max_iter=10000, iteration_based_decay_factor=0.99
         ):
         # need episodic learning
@@ -241,10 +241,20 @@ class MarkovDecisionProcess:
                 s = deepcopy(s0)
                 first_iteration = True
                 # episode
+                j = 0
                 while s is not None:
+                    j += 1
+                    if j > 20: break
                     # randomly select an action
-                    if exploration == 'uniform':
-                        a = random.choice(self.available_actions(s))
+                    if exploration == 'introduce-randomness':
+                        if random.random() < 0.5:
+                            a = random.choice(self.available_actions(s))
+                        else:
+                            Q_a = {
+                                a: Q[(s, a)]
+                                for a in self.available_actions(s)
+                            }
+                            a = max(Q_a, key=Q_a.get)
                     elif exploration == 'q-optimal':
                         Q_a = {
                             a: Q[(s, a)]
@@ -259,7 +269,7 @@ class MarkovDecisionProcess:
                         a0 = deepcopy(a)
                     
                     visits[(s, a)] += 1
-                    print(s, a)
+                    #print(s, a)
                     
                     if decay_pattern == 'mitchell':
                         # use the approach outlined in the book
@@ -300,7 +310,7 @@ class MarkovDecisionProcess:
                     abs(ending_Q_value - beginning_Q_value)
                 )
                     
-            #print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
+            print(f'At iteration {iteration}, max change in value: {max_change_in_value:.5f}')
             stats = update_stats(stats, iteration, time.time() - iteration_start, max_change_in_value)
             if max_change_in_value < epsilon:
                 terminate_algorithm = True

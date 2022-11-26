@@ -161,7 +161,7 @@ def array_state(s_hashable):
 
 class SnakeMDP(MarkovDecisionProcess):
     
-    def __init__(self, win_value=1, lose_value=-1, exist_factor=0.1,
+    def __init__(self, win_value=1, lose_value=-1, exist_factor=0.01,
                  board_length=5, max_snake_length=4, max_state_space=5e4):
         self.WIN = win_value
         self.LOSE = lose_value
@@ -202,7 +202,7 @@ class SnakeMDP(MarkovDecisionProcess):
         best_one_path, ones = states_longest_path_of_ones(
             array_state(s)
         )
-        return len(best_one_path) * self.exist_factor
+        return (len(best_one_path) - self.max_snake_length - 1) * self.exist_factor
     
     def accessible_states(self, s, a):
         if s[0] is None:
